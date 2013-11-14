@@ -5521,7 +5521,7 @@ int main(int argc, char *argv[])
 {
 	int opt, i, ret;
 	int fd = -1;
-	char prop[30];
+	char prop[100];
 
 
 	while ((opt=getopt_long(argc, argv, "+i:h", main_options, NULL)) != -1) {
