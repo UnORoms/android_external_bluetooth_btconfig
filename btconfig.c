@@ -3380,11 +3380,11 @@ static void cmd_lete(int uart_fd, int argc, char **argv)
 	// OGF_LE_CTL 0x08
 	// OCF_LE_TEST_END 0x001F
 	iRet = writeHciCommand(uart_fd, 0x08, 0x001F, 0, buf);
-	if (buf[6] != 0) {
+	if (buf[5] != 0) {
 		printf("\nError in ending LE test\n");
 		return;
 	}
-	printf("Number of packets = %d\n", buf[7] | (buf[8] << 8));
+	printf("Number of packets = %d\n", buf[6] | (buf[7] << 8));
 
 }
 
