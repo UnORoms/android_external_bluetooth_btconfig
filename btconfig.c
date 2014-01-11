@@ -740,7 +740,7 @@ int read_incoming_events(int fd, unsigned char* buf, int to)
 				printf("\n");
 				memset(buf , 0, sizeof(buf));
 				count = 0; i = 0;size =0;
-				break;
+				return 0;
 
 		}
 
@@ -4297,8 +4297,8 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 
 	printf("Raw HCI command\n");
 	memset(&resultBuf,0,MAX_EVENT_SIZE);
-	//if (!iRet)
-	//	read_incoming_events(uart_fd, resultBuf, 0);
+	if (!iRet)
+		read_incoming_events(uart_fd, resultBuf, 0);
 	printf("\n");
 }
 
