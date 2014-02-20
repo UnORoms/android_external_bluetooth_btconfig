@@ -4262,6 +4262,7 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 	uint16_t ogf, ocf;
 	unsigned long val32;
 	unsigned char *pval8;
+	unsigned short *pval16;
 
 	if(argc < 2){
 		printf("\n%s\n",rawcmd_help);
@@ -4275,8 +4276,8 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 	ogf = (unsigned short)*pval8;
 
 	val32 = strtol((char*)argv[2], NULL, 16);
-	pval8 = ((unsigned char*)&val32);
-	ocf = (unsigned short)*pval8;
+	pval16 = ((unsigned char*)&val32);
+	ocf = (unsigned short)*pval16;
 
 	for (i = 3; i < argc; i++)
 	{
