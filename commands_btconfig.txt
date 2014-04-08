@@ -1,5 +1,6 @@
 General format
-#btconfig /dev/smd3 <command , parameters >
+For ROME over UART: #btconfig <command , parameters >
+FOR smd based devices: #btconfig /dev/smd3 <command , parameters >
 
 ==================RESET COMMAND=================
 127|root@android:/ # btconfig /dev/smd3 reset

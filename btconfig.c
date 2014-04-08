@@ -31,6 +31,7 @@
 #include <config.h>
 #endif
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
@@ -59,13 +60,16 @@
 #include <limits.h>
 #endif
 
-
-
 #include "btconfig.h"
 #include "masterblaster.h"
+#include "bt_vendor_lib.h"
 
 #define PRONTO_SOC TRUE
 #define Inquiry_Complete_Event  0x01
+
+static char prop[100] = {0};
+static char soc_type[100] = {0};
+static bt_vendor_interface_t * p_btf=NULL;
 
 void baswap(bdaddr_t *dst, const bdaddr_t *src)
 {
@@ -509,19 +513,25 @@ int hci_send_cmd(int uart_fd, uint16_t ogf, uint16_t ocf, uint8_t plen, void *pa
 	uint8_t hci_command_buf[256] = {0};
 	uint16_t opcode;
 	int i;
+	uint8_t * p_buf = &hci_command_buf[0];
+	uint8_t head_len = 3;
 
 	opcode = htobs(HCI_OPCODE_PACK(ogf, ocf));
 
-	//hci_command_buf[0]= type;
-	hci_command_buf[0]= (uint8_t)(opcode & 0xff	);
-	hci_command_buf[1]= (uint8_t)((opcode>>8) & 0xff);
-	hci_command_buf[2]= plen;
-
-	if(plen) {
-		memcpy(&hci_command_buf[3], (uint8_t*) param, plen);
+	if(!strcasecmp(soc_type, "rome")){  // rome uart
+		*p_buf++ = type;
+		head_len ++;
 	}
 
-	if( write(uart_fd, hci_command_buf, plen+3) < 0) {
+	*p_buf++ = (uint8_t)(opcode & 0xff	);
+	*p_buf++ = (uint8_t)((opcode>>8) & 0xff);
+	*p_buf++ = plen;
+
+	if(plen) {
+		memcpy(p_buf, (uint8_t*) param, plen);
+	}
+
+	if( write(uart_fd, hci_command_buf, plen + head_len) < 0) {
 		return -1;
 	}
 	return 0;
@@ -600,22 +610,25 @@ int read_event_modified(int fd, unsigned char* buf, int to)
 		count++;
 
 #endif		/* The next two bytes are the event code and parameter total length. */
-		while (count < 2) {
-			r = read(fd, buf + count, 2 - count);
-			if (r <= 0)
-				return -1;
-			count += r;
-		}
-
-		if (buf[1] == 0)
-		{
-			printf("Zero len , invalid \n");
+	if(!strcasecmp(soc_type, "rome")){ // for rome-uart, the 1st byte are packet type, should always be 4
+		r = read(fd, buf, 1);
+		if  (r<=0 || buf[0] != 4)  return -1;
+	}
+	while (count < 2) {
+		r = read(fd, buf + count, 2 - count);
+		if (r <= 0)
 			return -1;
-		}
-		size = buf[1]+2;
+		count += r;
+	}
 
-		/* Now we read the parameters. */
-		while (count  < size ) {
+	if (buf[1] == 0)
+	{
+		printf("Zero len , invalid \n");
+		return -1;
+	}
+	size = buf[1] + 2;
+	/* Now we read the parameters. */
+	while (count  < size ) {
 			r = read(fd, buf + count, size);
 			if (r <= 0)
 			{
@@ -626,7 +639,7 @@ int read_event_modified(int fd, unsigned char* buf, int to)
 		}
 
 		printf("\n*************Data read begin ************* \n");
-		for (i=0 ; i< buf[1] + 2 ; i++)
+		for (i=0 ; i< size ; i++)
 			printf("[%x]", buf[i]);
 		printf("\n*************Data read end **************\n");
 
@@ -651,8 +664,10 @@ int read_incoming_events(int fd, unsigned char* buf, int to)
 	start_utime = tv1.tv_sec*1000000 + tv1.tv_usec;
 
 	do{
-		/* The first byte identifies the packet type. For HCI event packets, it
-		 * should be 0x04, so we read until we get to the 0x04. */
+		if(!strcasecmp(soc_type, "rome")){ // for rome-uart, the 1st byte are packet type, should always be 4
+			r = read(fd, buf, 1);
+			if  (r<=0 || buf[0] != 4)  return -1;
+		}
 		/* The next two bytes are the event code and parameter total length. */
 		while (count < 2) {
 			r = read(fd, buf + count, 2 - count);
@@ -741,7 +756,6 @@ int read_incoming_events(int fd, unsigned char* buf, int to)
 				memset(buf , 0, sizeof(buf));
 				count = 0; i = 0;size =0;
 				return 0;
-
 		}
 
 		/* buf[1] should be the event opcode
@@ -776,6 +790,7 @@ static int writeHciCommand(int uart_fd, uint16_t ogf, uint16_t ocf, uint8_t plen
 		perror("Send failed");
 		exit(EXIT_FAILURE);
 	}
+
 	sleep(0.4);
 
 	return read_event_modified(uart_fd, buf, 0);
@@ -1106,10 +1121,10 @@ static void cmd_rba(int uart_fd, int argc, char **argv){
 	}
 	printf("\nBD ADDRESS: \n");
 	int i;
-	for(i=iRet-1;i > 7;i--){
+	for(i=iRet-1;i > 6;i--){
 		printf("%02X:",buf[i]);
 	}
-	printf("%X \n\n",buf[7]);
+	printf("%02X\n\n",buf[6]);
 }
 
 static const char *dtx_help =
@@ -1746,12 +1761,12 @@ static void cmd_mb(int uart_fd, int argc, char **argv){
 	// OGF_INFO_PARAM 0x04
 	// OCF_READ_BD_ADDR 0x0009
 	iRet = writeHciCommand(uart_fd, 0x04, 0x0009, 0, buf);
-	if (buf[6] != 0) {
+	if (buf[5] != 0) {
 		printf("\nread bdaddr command failed due to reason 0x%X\n",buf[6]);
 		return;
 	}
 	char bda[18];
-	for (i=iRet-1,j=0;i>7;i--,j+=3) {
+	for (i=iRet-1,j=0;i>6;i--,j+=3) {
 		snprintf(&bda[j],sizeof(bda[j]),"%X",((buf[i]>>4)&0xFF));
 		snprintf(&bda[j+1],sizeof(bda[j+1]),"%X",(buf[i]&0x0F));
 		snprintf(&bda[j+2],sizeof(bda[j+2]),":");
@@ -3380,11 +3395,11 @@ static void cmd_lete(int uart_fd, int argc, char **argv)
 	// OGF_LE_CTL 0x08
 	// OCF_LE_TEST_END 0x001F
 	iRet = writeHciCommand(uart_fd, 0x08, 0x001F, 0, buf);
-	if (buf[5] != 0) {
+	if (buf[6] != 0) {
 		printf("\nError in ending LE test\n");
 		return;
 	}
-	printf("Number of packets = %d\n", buf[6] | (buf[7] << 8));
+	printf("Number of packets = %d\n", buf[7] | (buf[8] << 8));
 
 }
 
@@ -4262,7 +4277,6 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 	uint16_t ogf, ocf;
 	unsigned long val32;
 	unsigned char *pval8;
-	unsigned short *pval16;
 
 	if(argc < 2){
 		printf("\n%s\n",rawcmd_help);
@@ -4276,8 +4290,8 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 	ogf = (unsigned short)*pval8;
 
 	val32 = strtol((char*)argv[2], NULL, 16);
-	pval16 = ((unsigned char*)&val32);
-	ocf = (unsigned short)*pval16;
+	pval8 = ((unsigned char*)&val32);
+	ocf = (unsigned short)*pval8;
 
 	for (i = 3; i < argc; i++)
 	{
@@ -4319,16 +4333,16 @@ static void cmd_hciinvcmd1(int uart_fd, int argc, char **argv){
 	memset(&buf,0,MAX_EVENT_SIZE);
 	buf[0] = atoi(argv[1]);
 	iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, 0x00, 1, buf);
-	if(buf[6] != 0){
+	if(buf[5] != 0){
 		printf("\nError: Invalid HCI cmd due to the reason 0X%X\n", buf[6]);
 		return;
 	}
 	printf("\nINVALID HCI COMMAND: \n");
 	int i;
-	for(i=iRet-1;i > 7;i--){
+	for(i=iRet-1;i > 6;i--){
 		printf("%02X:",buf[i]);
 	}
-	printf("%X \n\n",buf[7]);
+	printf("%2X\n\n",buf[6]);
 }
 
 /* EOF SMD cmds */
@@ -4398,12 +4412,19 @@ static void usage(void)
 	int i;
 
 	printf("btconfig - BTCONFIG Tool ver %s\n", VERSION);
-	printf("Usage:\n"
+	if(!strcasecmp(soc_type, "rome")){
+		printf("Usage:\n"
+			"\tbtconfig [options] <command> [command parameters]\n");
+	} else {
+		printf("Usage:\n"
 		"\tbtconfig [options] <tty> <speed> <command> [command parameters]\n");
+	}
 	printf("Options:\n"
 		"\t--help\tDisplay help\n");
-	printf("tty:\n"
-		"\t/dev/ttyHS1\n");
+	if(strcasecmp(soc_type, "rome")){ // this parameter is not needed for ROME
+		printf("tty:\n"
+			"\t/dev/ttyHS1\n");
+	}
 	printf("Commands:\n");
 	for (i = 0; command[i].cmd; i++)
 		printf("\t%-8s %-40s\t%s\n", command[i].cmd,command[i].cmd_option,command[i].doc);
@@ -5460,7 +5481,6 @@ static int init_uart(char *dev, int user_specified_speed)
 	int fd;
 	unsigned long flags = 0;
 
-
 	fd = open(dev, O_RDWR | O_NOCTTY);
 	if (fd < 0) {
 		perror("Can't open serial port");
@@ -5507,7 +5527,6 @@ static int init_uart(char *dev, int user_specified_speed)
 				close(fd);
 				return -1;
         }
-
 	if (ath3k_init(fd, user_specified_speed,115200, NULL, &ti) < 0){
 		close(fd);
 		return -1;
@@ -5518,12 +5537,41 @@ static int init_uart(char *dev, int user_specified_speed)
 	return fd;
 }
 
+int rome_uart_init()
+{
+	int fd_array[CH_MAX];
+	bt_vendor_callbacks_t cb;
+	uint8_t init_bd_addr[6]={0x01, 0x01, 0x01, 0x01, 0x01, 0x01};
+
+	void* vendor_handle = dlopen("libbt-vendor.so", RTLD_NOW);
+	p_btf = (bt_vendor_interface_t *) dlsym(vendor_handle, "BLUETOOTH_VENDOR_LIB_INTERFACE");
+
+	if(p_btf && p_btf->init(&cb, &init_bd_addr[0]) < 0){
+		printf("bt vendor init failed \n");
+		return -1;
+	}
+
+	int iState = BT_VND_PWR_ON;
+	if(p_btf->op(BT_VND_OP_POWER_CTRL, &iState) < 0){
+		printf("bt power on failed \n");
+		return -1;
+	}
+
+	if(p_btf->op(BT_VND_OP_USERIAL_OPEN, (void*)fd_array) < 0){
+		printf("bt op(BT_VND_OP_USERIAL_OPEN) failed \n");
+		return -1;
+	}
+
+	return fd_array[0];
+}
+
 int main(int argc, char *argv[])
 {
-	int opt, i, ret;
-	int fd = -1;
-	char prop[100];
+	int opt, i, min_para = 2;
+	static int fd = -1;
 
+	property_get("ro.qualcomm.bt.hci_transport", prop, NULL);
+	property_get("qcom.bluetooth.soc", soc_type, NULL);
 
 	while ((opt=getopt_long(argc, argv, "+i:h", main_options, NULL)) != -1) {
 		switch (opt) {
@@ -5534,27 +5582,33 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if(!strcasecmp(soc_type, "rome"))  min_para = 1;
+
 	argc -= optind;
 	argv += optind;
 	optind = 0;
 
-	if (argc < 2) {
+	if (argc < min_para) {
 		usage();
 		exit(0);
 	}
 
-	ret = property_get("ro.qualcomm.bt.hci_transport", prop, NULL);
-
 	if (!strcasecmp(prop, "smd")) {
 		fd = init_smd(argv[optind]);
+	} else if(!strcasecmp(soc_type, "rome")){
+		fd = rome_uart_init();
+		if(fd < 0) {
+			perror("rome uart initialize failed!");
+			exit(1);
+		}
 	} else if ((fd = init_uart(argv[optind], atoi(argv[optind+1]))) < 0) {
 		perror("Device is not available");
 		exit(1);
 	}
-
-	argv +=1;
-	argc -=1;
-
+	if(strcasecmp(soc_type, "rome")){
+		argv +=1;
+		argc -=1;
+	}
 	for (i = 0; command[i].cmd; i++) {
 		if (strcmp(command[i].cmd, argv[0]))
 			continue;
