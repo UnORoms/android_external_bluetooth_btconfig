@@ -404,7 +404,8 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 					buf[4+j]=RamPatch[i].Data[j];
 				}
 				iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF,OCF_PS,RamPatch[i].Len + PS_COMMAND_HEADER, buf);
-				if(buf[iRet-1] != 0){
+				if(iRet >= MAX_EVENT_SIZE || buf[iRet-1] != 0){
+					if(iRet >= MAX_EVENT_SIZE) printf("MAX buffer Exceed! %d\n", iRet);
 					return FALSE;
 				}
 			}
@@ -816,6 +817,10 @@ static int MemBlkRead(int uart_fd,UINT32 Address,UCHAR *pBuffer, UINT32 Length){
 		Size = (ByteLeft > MEM_BLK_DATA_MAX) ? MEM_BLK_DATA_MAX : ByteLeft;
 	//	printf("\nMemBlkwrite : Size :%x   Address :%x\n",Size, Address);
 		pData = (UCHAR *) malloc(Size + 6);
+		if(!pData){
+			printf("bt MemBlkRead: allocation failed! \n");
+			return -1;
+		}
 		pData[0]= 0x00;//depot/esw/projects/azure/AR3001_3_0/src/hci/Hci_Vsc_Proc.c
 		pData[1]= (Address & 0xFF);
 		pData[2]= ((Address >> 8) & 0xFF);
@@ -859,6 +864,10 @@ static int MemBlkwrite(int uart_fd,UINT32 Address,UCHAR *pBuffer, UINT32 Length)
 		Size = (ByteLeft > MEM_BLK_DATA_MAX) ? MEM_BLK_DATA_MAX : ByteLeft;
 	//	printf("\nMemBlkwrite : Size :%x   Address :%x\n",Size, Address);
 		pData = (UCHAR *) malloc(Size + 6);
+		if(!pData){
+			printf("bt MemBlkRead: allocation failed! \n");
+			return -1;
+		}
 		pData[0]= 0x01;
 		pData[1]= (Address & 0xFF);
 		pData[2]= ((Address >> 8) & 0xFF);
@@ -1075,7 +1084,7 @@ static const char *reset_help =
 
 static void cmd_reset(int uart_fd, int argc, char **argv){
 	int Length =0,iRet;
-	UCHAR buf[3];
+	UCHAR buf[MAX_EVENT_SIZE];
 
 	if(argc > 1) {
 		printf("\n%s\n",reset_help);
@@ -1115,6 +1124,10 @@ static void cmd_rba(int uart_fd, int argc, char **argv){
 	// OCF_READ_BD_ADDR 0x0009
 	iRet = writeHciCommand(uart_fd, 0x04, 0x0009, 0, buf);
 	printf("iRet: %d\n", iRet);
+	if(iRet>=MAX_EVENT_SIZE){
+		printf("\nread buffer size overflowed  %d\n", iRet);
+		return;
+	}
 	if(buf[5] != 0){
 		printf("\nread bdaddr command failed due to reason 0x%X\n",buf[6] );
 		return;
@@ -1260,6 +1273,10 @@ static int ReadMemorySmallBlock(int uart_fd, int StartAddress,UCHAR *pBufToWrite
 	UCHAR *pData;
 	UCHAR buf[MAX_EVENT_SIZE];
 	pData = (UCHAR *) malloc(Length + 6);
+	if(!pData){
+		printf("bt ReadMemorySmallBlock: allocation failed! \n");
+                return -1;
+	}
 	memset(pData,0,Length+6);
 	pData[0]= 0x00;  //Memory Read Opcode
 	pData[1]= (StartAddress & 0xFF);
@@ -1316,6 +1333,10 @@ static int WriteMemorySmallBlock(int uart_fd, int StartAddress,UCHAR *pBufToWrit
 	/*if(Length <= MEM_BLK_DATA_MAX)
 		return FALSE; */
 	pData = (UCHAR *) malloc(Length + 6);
+	if(!pData){
+		printf("bt WriteMemorySmallBlock: allocation failed! \n");
+		return -1;
+        }
 	memset(pData,0,Length+6);
 	pData[0]= 0x01;  //Write Read Opcode
 	pData[1]= (StartAddress & 0xFF);
@@ -1362,6 +1383,10 @@ static int ReadHostInterest(int uart_fd,tBtHostInterest *pHostInt){
 	int HostInterestAddress;
 	memset(&buf,0,MAX_EVENT_SIZE);
 	iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_HOST_INTEREST, 0, buf);
+	if(iRet < 4 || iRet>=MAX_EVENT_SIZE){
+		printf("\nread buffer size overflowed  %d\n", iRet);
+		return FALSE;
+	}
 	if(buf[6] != 0){
 		printf("\nhost interest command failed due to reason 0x%X\n",buf[6]);
 		return FALSE;
@@ -1766,7 +1791,7 @@ static void cmd_mb(int uart_fd, int argc, char **argv){
 		return;
 	}
 	char bda[18];
-	for (i=iRet-1,j=0;i>6;i--,j+=3) {
+	for (i = 11, j = 0; i>6; i--, j += 3) {
 		snprintf(&bda[j],sizeof(bda[j]),"%X",((buf[i]>>4)&0xFF));
 		snprintf(&bda[j+1],sizeof(bda[j+1]),"%X",(buf[i]&0x0F));
 		snprintf(&bda[j+2],sizeof(bda[j+2]),":");
@@ -2754,6 +2779,10 @@ static void cmd_rafh(int uart_fd, int argc, char **argv){
 	// OGF_STATUS_PARAM 0x05
 	// OCF_READ_AFH_MAP 0x0006
 	iRet = writeHciCommand(uart_fd, 0x05,0x0006, 2, buf);
+	if(iRet>=MAX_EVENT_SIZE){
+		printf("\nread buffer size overflowed  %d\n", iRet);
+		return;
+	}
 	if(buf[6] != 0){
 		printf("\nRead AFH failed due to reason :0x%X\n",buf[6]);
 		return;
@@ -3115,6 +3144,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		char *ofs = NULL;
 		printf("\n Enter OTP_PID_OFFSET(default 134) : ");
 		getline(&ofs, &len, stdin);
+		if(!ofs){
+			printf("Error: ofs is NULL !\n");
+			return;
+		}
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		memset(pid, 0, sizeof(pid));
@@ -4333,6 +4366,10 @@ static void cmd_hciinvcmd1(int uart_fd, int argc, char **argv){
 	memset(&buf,0,MAX_EVENT_SIZE);
 	buf[0] = atoi(argv[1]);
 	iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, 0x00, 1, buf);
+	if(iRet>=MAX_EVENT_SIZE){
+		printf("\nread buffer size overflowed  %d\n", iRet);
+		return;
+	}
 	if(buf[5] != 0){
 		printf("\nError: Invalid HCI cmd due to the reason 0X%X\n", buf[6]);
 		return;
@@ -5544,9 +5581,18 @@ int rome_uart_init()
 	uint8_t init_bd_addr[6]={0x01, 0x01, 0x01, 0x01, 0x01, 0x01};
 
 	void* vendor_handle = dlopen("libbt-vendor.so", RTLD_NOW);
+	if(!vendor_handle){
+		printf("bt open libbt-vendor.so failed \n");
+		return -1;
+	}
 	p_btf = (bt_vendor_interface_t *) dlsym(vendor_handle, "BLUETOOTH_VENDOR_LIB_INTERFACE");
 
-	if(p_btf && p_btf->init(&cb, &init_bd_addr[0]) < 0){
+	if(!p_btf){
+		printf("bt load libbt-vendor.so symble failed \n");
+                return -1;
+	}
+
+	if(p_btf->init(&cb, &init_bd_addr[0]) < 0){
 		printf("bt vendor init failed \n");
 		return -1;
 	}
@@ -5785,13 +5831,18 @@ void PrintMasterBlasterMenu(tBRM_Control_packet *MasterBlaster)
 		if (MasterBlaster->ContTxMode == ENABLE)
 		{
 			printf ("ContTxType: %s\n", ContTxTypeOption[MasterBlaster->ContTxType].Name);
-			if (ContTxTypeOption[MasterBlaster->ContTxType].Value != CW_Single_Tone)
-				printf ("TestMode:   %s\n", TestModeOption[GetTestModeOptionIndex(MasterBlaster->testCtrl.Mode)].Name);
+			if (ContTxTypeOption[MasterBlaster->ContTxType].Value != CW_Single_Tone){
+				int index = GetTestModeOptionIndex(MasterBlaster->testCtrl.Mode);
+				if(index < 0)   printf("Unable to find the matching Test Mode! %d \n", MasterBlaster->testCtrl.Mode);
+				else printf ("TestMode:   %s\n", TestModeOption[index].Name);
+			}
 			printf ("TxFreq:     %d\n", MasterBlaster->testCtrl.TxFreq);
 		}
 		else
 		{
-			printf ("TestMode:   %s\n", TestModeOption[GetTestModeOptionIndex(MasterBlaster->testCtrl.Mode)].Name);
+			int index = GetTestModeOptionIndex(MasterBlaster->testCtrl.Mode);
+			if(index < 0)   printf("Unable to find the matching Test Mode! %d \n", MasterBlaster->testCtrl.Mode);
+			else printf ("TestMode:   %s\n", TestModeOption[index].Name);
 			printf ("HopMode:    %s\n", HopModeOption[MasterBlaster->testCtrl.HopMode].Name);
 
 			if (MasterBlaster->testCtrl.HopMode == 0)
@@ -5812,7 +5863,9 @@ void PrintMasterBlasterMenu(tBRM_Control_packet *MasterBlaster)
 		if ((MasterBlaster->ContTxMode == ENABLE && ContTxTypeOption[MasterBlaster->ContTxType].Value == Cont_Tx_Regular) ||
 		(MasterBlaster->ContTxMode == DISABLE))
 		{
-			printf ("PacketType: %s\n", PacketTypeOption[GetPacketTypeOptionIndex(MasterBlaster->testCtrl.Packet)].Name);
+			int index = GetPacketTypeOptionIndex(MasterBlaster->testCtrl.Packet);
+			if(index < 0)   printf("Unable to find the matching Packet Type Option Index! %d \n", MasterBlaster->testCtrl.Packet);
+			printf ("PacketType: %s\n", PacketTypeOption[index].Name);
 			printf ("DataLen:    %d\n", MasterBlaster->testCtrl.DataLen);
 		}
 		if (ContTxTypeOption[MasterBlaster->ContTxType].Value != CW_Single_Tone) {//for single tone, no bdaddr
@@ -5922,6 +5975,11 @@ int SetMasterBlasterPacketType (tBRM_Control_packet *MasterBlaster, tMasterBlast
                         sizeof(PacketTypeOption)/sizeof(tMasterBlasterOption), PT,1))
    {
       MasterBlaster->testCtrl.Packet = (UCHAR)Value;
+	int index = GetPacketTypeOptionIndex(Value);
+	if(index<0){
+		printf("Fail to Get Packet Type Option Index Value(%d) Index(%d)\n", Value, index);
+		return FALSE;
+	}
       MasterBlaster->testCtrl.DataLen = MaxDataLenOption[GetPacketTypeOptionIndex(Value)];
       return TRUE;
    }
