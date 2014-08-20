@@ -404,10 +404,11 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 					buf[4+j]=RamPatch[i].Data[j];
 				}
 				iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF,OCF_PS,RamPatch[i].Len + PS_COMMAND_HEADER, buf);
-				if(iRet >= MAX_EVENT_SIZE || buf[iRet-1] != 0){
-					if(iRet >= MAX_EVENT_SIZE) printf("MAX buffer Exceed! %d\n", iRet);
-					return FALSE;
+				if(iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                                     printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                                     return FALSE;
 				}
+                                if (buf[iRet - 1] != 0)  return FALSE;
 			}
 			break;
 
@@ -416,6 +417,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			i=0;
 			LoadPSHeader(buf,Opcode,Length,i);
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS,PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                           printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                           return FALSE;
+                        }
 			if(buf[iRet-1] != 0){
 				return FALSE;
 			}
@@ -429,6 +434,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			buf[9] = ((Param1 >>  8) & 0xFF);
 			Length = 6;
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS,Length + PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                            printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                            return FALSE;
+                        }
 			if(buf[iRet-1] != 0){
 				return FALSE;
 			}
@@ -440,6 +449,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			Length = len[0] | ( len[1] << 8);
 			LoadPSHeader(buf,Opcode,Length,Param1);
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS, Length + PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                            printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                            return FALSE;
+                        }
 			if(buf[iRet-1] != 0) {
 				return FALSE;
 			}
@@ -459,6 +472,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 					buf[4+j]=PsTagEntry[i].TagData[j];
 				}
 				iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS,PsTagEntry[i].TagLen + PS_COMMAND_HEADER, buf);
+                                if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                                    printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                                    return FALSE;
+                                }
 				if(buf[iRet-1] != 0){
 					return FALSE;
 				}
@@ -471,6 +488,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 				buf[4+j]=RamDynMemOverride.Data[j];
 			}
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF,OCF_PS,RamDynMemOverride.Len + PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                            printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                            return FALSE;
+                        }
 			if(buf[iRet-1] != 0){
 				return FALSE;
 			}
@@ -481,6 +502,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			Length =0;
 			LoadPSHeader(buf,Opcode,Length,Param1);
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS, PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                            printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                            return FALSE;
+                        }
 			if(buf[iRet-1] != 0){
 				return FALSE;
 			}
@@ -490,6 +515,10 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			ssize_t plen = 0;
 			LoadPSHeader(buf,Opcode,0,Param1);
 			iRet = writeHciCommand(uart_fd, HCI_VENDOR_CMD_OGF, OCF_PS, PS_COMMAND_HEADER, buf);
+                        if (iRet < 1 || iRet >= MAX_EVENT_SIZE){
+                            printf("Error: iRet get wrong! iRet(%d), MAX_EVENT_SIZE(%d)\n", iRet, MAX_EVENT_SIZE);
+                            return FALSE;
+                        }
 			if(buf[iRet-1] != 0){
 				return FALSE;
 			}
@@ -502,7 +531,7 @@ static BOOL PSOperations(int uart_fd, UCHAR Opcode, int Param1, UINT32 *out) {
 			break;
 		}
 	}
-		return TRUE;
+	return TRUE;
 }
 
 /* HCI functions that require open device
@@ -1794,13 +1823,12 @@ static void cmd_mb(int uart_fd, int argc, char **argv){
 	for (i = 11, j = 0; i>6; i--, j += 3) {
 		snprintf(&bda[j],sizeof(bda[j]),"%X",((buf[i]>>4)&0xFF));
 		snprintf(&bda[j+1],sizeof(bda[j+1]),"%X",(buf[i]&0x0F));
-		snprintf(&bda[j+2],sizeof(bda[j+2]),":");
+		bda[j+2] = ':'; //   snprintf(&bda[j+2],sizeof(bda[j+2]),":");
 	}
 	snprintf(&bda[15],sizeof(bda[15]),"%X",((buf[7]>>4)&0xFF));
 	snprintf(&bda[16],sizeof(bda[16]),"%X",(buf[7]&0x0F));
-	bda[18] ='\0';
+	bda[17] ='\0';
 	str2ba(bda,&bdaddr);
-
 	InitMasterBlaster(&MasterBlaster, &bdaddr, &SkipRxSlot);
 #ifndef DUMP_DEBUG
 	Ok = ReadHostInterest(uart_fd,&HostInt);
@@ -2059,6 +2087,7 @@ static void cmd_mb(int uart_fd, int argc, char **argv){
 //		    printf("first:%x,nbyte:%d, packet:%d, pattern:%x\n",buf[0], iRet, (uint16_t)(buf[3] | (buf[4] << 8)), buf[5]);
                     if (buf[0] == 0x2) {        // ACL data
                             m_BerTotalBits = m_BerTotalBits + iDataSize * 8;
+                            if (iDataSize > MAX_EVENT_SIZE - 9)  iDataSize = MAX_EVENT_SIZE - 9;
                             for(j=0,l=0;j<iDataSize;j++,l++) {
                                 if (l == m_pPatternlength) l = 0;
                                 for(k=0;k<8;k++){
@@ -3144,11 +3173,11 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		char *ofs = NULL;
 		printf("\n Enter OTP_PID_OFFSET(default 134) : ");
 		getline(&ofs, &len, stdin);
-		if(!ofs){
-			printf("Error: ofs is NULL !\n");
-			return;
-		}
-		sscanf(ofs, "%d", &offset);
+                if(!ofs){
+                        printf("Error: ofs is NULL !\n");
+                        return;
+                }
+                sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		memset(pid, 0, sizeof(pid));
 		if (argc < 3 || !*argv[2]) {
@@ -3172,6 +3201,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		char *ofs = NULL;
 		printf("\n Enter OTP_PID_OFFSET(default 134) : ");
 		getline(&ofs, &len, stdin);
+		if(!ofs){
+			printf("Failed! getline return NULL ofs!\n");
+			return;
+		}
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		if (read_otpRaw(uart_fd, offset, 2, Data)) {
@@ -3186,6 +3219,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		char *ofs = NULL;
 		printf("\n Enter OTP_VID_OFFSET(default 136) : ");
 		getline(&ofs, &len, stdin);
+                if(!ofs){
+                        printf("Failed! getline return NULL ofs!\n");
+                        return;
+                }
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		memset(vid, 0, sizeof(vid));
@@ -3210,6 +3247,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		UCHAR Data[2];
 		printf("\n Enter OTP_VID_OFFSET(default 136) : ");
 		getline(&ofs, &len, stdin);
+                if(!ofs){
+                        printf("Failed! getline return NULL ofs!\n");
+                        return;
+                }
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		if (read_otpRaw(uart_fd, offset, 2, Data)) {
@@ -3224,6 +3265,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		char *ofs = NULL;
 		printf("\n Enter OTP_BDA_OFFSET(default 128) : ");
 		getline(&ofs, &len, stdin);
+                if(!ofs){
+                        printf("Failed! getline return NULL ofs!\n");
+                        return;
+                }
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		memset(bdaddr, 0, sizeof(bdaddr));
@@ -3248,6 +3293,10 @@ static void cmd_otp(int uart_fd, int argc, char **argv)
 		UCHAR Data[6];
 		printf("\n Enter OTP_BDA_OFFSET(default 128) : ");
 		getline(&ofs, &len, stdin);
+                if(!ofs){
+                        printf("Failed! getline return NULL ofs!\n");
+                        return;
+                }
 		sscanf(ofs, "%d", &offset);
 		if (ofs) free(ofs);
 		if (read_otpRaw(uart_fd, offset, 6, Data)) {
@@ -4559,17 +4608,20 @@ static int read_ps_event(uint8_t *event, uint16_t ocf)
 
 static int write_cmd(int fd, uint8_t *buffer, int len)
 {
-	uint8_t *event;
+	uint8_t *event = NULL;
 	int err;
 
 	err = send_hci_cmd_sync(fd, buffer, len, &event);
-	if (err < 0)
-		return err;
+        if (err < 0 || !event){
+                if(event) free(event);
+                event = NULL;
+                return err;
+        }
 
 	err = read_ps_event(event, HCI_PS_CMD_OCF);
 
 	free(event);
-
+        event = NULL;
 	return err;
 }
 
@@ -4883,7 +4935,7 @@ static int set_patch_ram(int dev, char *patch_loc, int len)
 	uint8_t cmd[20];
 	int i, j;
 	char loc_byte[3];
-	uint8_t *event;
+	uint8_t *event = NULL;
 	uint8_t *loc_ptr = &cmd[7];
 
 	if (!patch_loc)
@@ -4901,13 +4953,16 @@ static int set_patch_ram(int dev, char *patch_loc, int len)
 	}
 
 	err = send_hci_cmd_sync(dev, cmd, SET_PATCH_RAM_CMD_SIZE, &event);
-	if (err < 0)
-		return err;
+        if (err < 0 || !event){
+                if(event) free(event);
+                event = NULL;
+                return err;
+        }
 
 	err = read_ps_event(event, HCI_PS_CMD_OCF);
 
 	free(event);
-
+        event = NULL;
 	return err;
 }
 
@@ -5014,20 +5069,24 @@ static void get_patch_file_name(uint32_t dev_type, uint32_t rom_version,
 static int get_ath3k_crc(int dev)
 {
 	uint8_t cmd[7];
-	uint8_t *event;
+	uint8_t *event = NULL;
 	int err;
 
 	load_hci_ps_hdr(cmd, VERIFY_CRC, 0, PS_REGION | PATCH_REGION);
 
 	err = send_hci_cmd_sync(dev, cmd, sizeof(cmd), &event);
-	if (err < 0)
-		return err;
+        if (err < 0 || !event){
+                if(event) free(event);
+                event = NULL;
+                return err;
+        }
+
 	/* Send error code if CRC check patched */
 	if (read_ps_event(event, HCI_PS_CMD_OCF) >= 0)
 		err = -EILSEQ;
 
 	free(event);
-
+        event = NULL;
 	return err;
 }
 
@@ -5037,7 +5096,7 @@ static int get_ath3k_crc(int dev)
 static int get_device_type(int dev, uint32_t *code)
 {
 	uint8_t cmd[8];
-	uint8_t *event;
+	uint8_t *event = NULL;
 	uint32_t reg;
 	int err;
 	uint8_t *ptr = cmd;
@@ -5055,8 +5114,11 @@ static int get_device_type(int dev, uint32_t *code)
 	ptr[4] = 0x04;
 
 	err = send_hci_cmd_sync(dev, cmd, sizeof(cmd), &event);
-	if (err < 0)
+	if (err < 0 || !event){
+                if(event) free(event);
+                event = NULL;
 		return err;
+        }
 
 	err = read_ps_event(event, GET_DEV_TYPE_OCF);
 	if (err < 0)
@@ -5070,7 +5132,7 @@ static int get_device_type(int dev, uint32_t *code)
 
 cleanup:
 	free(event);
-
+        event = NULL;
 	return err;
 }
 
@@ -5078,7 +5140,7 @@ static int read_ath3k_version(int pConfig, uint32_t *rom_version,
 					uint32_t *build_version)
 {
 	uint8_t cmd[3];
-	uint8_t *event;
+	uint8_t *event = NULL;
 	int err;
 	int status;
 	hci_command_hdr *ch = (void *)cmd;
@@ -5088,8 +5150,11 @@ static int read_ath3k_version(int pConfig, uint32_t *rom_version,
 	ch->plen = 0;
 
 	err = send_hci_cmd_sync(pConfig, cmd, sizeof(cmd), &event);
-	if (err < 0)
+	if (err < 0 || !event){
+                if(event)  free(event);
+                event = NULL;
 		return err;
+        }
 
 	err = read_ps_event(event, OCF_READ_VERSION);
 	if (err < 0)
@@ -5109,7 +5174,7 @@ static int read_ath3k_version(int pConfig, uint32_t *rom_version,
 
 cleanup:
 	free(event);
-
+        event = NULL;
 	return err;
 }
 
@@ -5140,7 +5205,7 @@ static void convert_bdaddr(char *str_bdaddr, char *bdaddr)
 
 static int write_bdaddr(int pConfig, char *bdaddr)
 {
-	uint8_t *event;
+	uint8_t *event = NULL;
 	int err;
 	uint8_t cmd[13];
 	uint8_t *ptr = cmd;
@@ -5161,12 +5226,15 @@ static int write_bdaddr(int pConfig, char *bdaddr)
 	convert_bdaddr(bdaddr, (char *)&ptr[4]);
 
 	err = send_hci_cmd_sync(pConfig, cmd, sizeof(cmd), &event);
-	if (err < 0)
+	if (err < 0 || !event){
+                if(event)  free(event);
+                event = NULL;
 		return err;
-
+        }
 	err = read_ps_event(event, HCI_PS_CMD_OCF);
 
 	free(event);
+        event = NULL;
 
 	return err;
 }
@@ -5864,7 +5932,10 @@ void PrintMasterBlasterMenu(tBRM_Control_packet *MasterBlaster)
 		(MasterBlaster->ContTxMode == DISABLE))
 		{
 			int index = GetPacketTypeOptionIndex(MasterBlaster->testCtrl.Packet);
-			if(index < 0)   printf("Unable to find the matching Packet Type Option Index! %d \n", MasterBlaster->testCtrl.Packet);
+			if(index < 0){
+				printf("Unable to find the matching Packet Type Option Index! %d \n", MasterBlaster->testCtrl.Packet);
+				return;
+			}
 			printf ("PacketType: %s\n", PacketTypeOption[index].Name);
 			printf ("DataLen:    %d\n", MasterBlaster->testCtrl.DataLen);
 		}
@@ -5980,7 +6051,7 @@ int SetMasterBlasterPacketType (tBRM_Control_packet *MasterBlaster, tMasterBlast
 		printf("Fail to Get Packet Type Option Index Value(%d) Index(%d)\n", Value, index);
 		return FALSE;
 	}
-      MasterBlaster->testCtrl.DataLen = MaxDataLenOption[GetPacketTypeOptionIndex(Value)];
+      MasterBlaster->testCtrl.DataLen = MaxDataLenOption[index];
       return TRUE;
    }
    return FALSE;
