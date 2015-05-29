@@ -1,4 +1,3 @@
-ifeq ($(BOARD_HAVE_BLUETOOTH),true)
 
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
@@ -19,4 +18,3 @@ LOCAL_SHARED_LIBRARIES += libcutils   \
                           libdl
 
 include $(BUILD_EXECUTABLE)
-endif

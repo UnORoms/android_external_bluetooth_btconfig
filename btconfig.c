@@ -738,7 +738,7 @@ int read_incoming_events(int fd, unsigned char* buf, int to)
 				printf("\n");
 				if(buf[2] == 0x02)
 				{
-				printf("\nUnknown connection identifier");
+				printf("\nUnknown connection identifier \n");
 				return 0;
                 }
 				memset(buf , 0, sizeof(buf));
@@ -4392,11 +4392,13 @@ static void cmd_rawcmd(int uart_fd, int argc, char **argv){
 
 	iRet = hci_send_cmd( uart_fd, ogf, ocf, i-3, buf);
 
-	printf("Raw HCI command\n");
+	printf("Raw HCI command sent returned : %d\n", iRet);
 	memset(&resultBuf,0,MAX_EVENT_SIZE);
-	if (!iRet)
-		read_incoming_events(uart_fd, resultBuf, 0);
-	printf("\n");
+	if (!iRet) {
+		printf("Read event \n");
+		read_hci_event(uart_fd, resultBuf, 0);
+		printf("Received event \n");
+	}
 }
 
 static const char *hciinvcmd1_help =
@@ -5586,6 +5588,7 @@ static int init_uart(char *dev, int user_specified_speed)
 	int fd;
 	unsigned long flags = 0;
 
+	printf("init uart : %s \n", dev);
 	fd = open(dev, O_RDWR | O_NOCTTY);
 	if (fd < 0) {
 		perror("Can't open serial port");
@@ -5676,6 +5679,7 @@ int rome_uart_init()
 		return -1;
 	}
 
+	printf("%s : fd : %d \n", __func__, fd_array[0]);
 	return fd_array[0];
 }
 
@@ -5684,8 +5688,10 @@ int main(int argc, char *argv[])
 	int opt, i, min_para = 2;
 	static int fd = -1;
 
+	setbuf(stdout, NULL);
+
 	property_get("ro.qualcomm.bt.hci_transport", prop, NULL);
-	property_get("qcom.bluetooth.soc", soc_type, NULL);
+	property_get("qcom.bluetooth.soc", soc_type, "rome");
 
 	while ((opt=getopt_long(argc, argv, "+i:h", main_options, NULL)) != -1) {
 		switch (opt) {
@@ -5708,6 +5714,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (!strcasecmp(prop, "smd")) {
+		perror("smd mode\n");
 		fd = init_smd(argv[optind]);
 	} else if(!strcasecmp(soc_type, "rome")){
 		fd = rome_uart_init();
